@@ -1,11 +1,19 @@
 {
   "name": "renz-claude-mods",
-  "owner": { "name": "Renz Sanchez" },
+  "owner": {
+    "name": "Renz Sanchez"
+  },
+  "description": "Small Claude Code mods by Renz Sanchez: reconnect a dropped IDE link, and mark who said what in the terminal.",
   "plugins": [
     {
       "name": "ide-reconnect",
       "source": "./plugins/ide-reconnect",
       "description": "Runs /ide when an editor is open on this folder but the IDE connection is down"
+    },
+    {
+      "name": "chat-callouts",
+      "source": "./plugins/chat-callouts",
+      "description": "Labels and frames chat messages in the terminal and draws drafts in their own copyable boxes"
     }
   ]
 }
