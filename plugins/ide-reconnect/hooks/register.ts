@@ -69,7 +69,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'ide-reconnect',
-      description: 'Check the IDE connection and run /ide if it is down',
+      description: 'Check the IDE connection now and run /ide if it is down (no arguments)',
     })
     $.clock.every(POLL_MS, () => {
       check($, false).then(
