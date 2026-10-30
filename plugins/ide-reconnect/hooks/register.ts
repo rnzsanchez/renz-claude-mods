@@ -2,6 +2,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const POLL_MS = 30_000
 const RETRY_MS = 5 * 60_000
+const MAX_RETRY_MS = 60 * 60_000
 
 type Lock = { pid: number; workspaceFolders?: string[]; ideName?: string }
 
@@ -47,10 +48,12 @@ async function probeIde($: EngineInterface, port: string): Promise<string | unde
 }
 
 let lastTry = 0
+let failures = 0
 let lastToast = ''
-let gaveUp = false
 
-const GAVE_UP = 'auto retries are off for this session after /ide failed to connect; run /ide-reconnect to try again.'
+async function listening($: EngineInterface, port: string): Promise<boolean> {
+  return (await $.process.run(['lsof', '-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'])).exitCode === 0
+}
 
 async function check($: EngineInterface, force: boolean): Promise<string> {
   const ides = await liveIdes($)
@@ -59,22 +62,22 @@ async function check($: EngineInterface, force: boolean): Promise<string> {
   for (const live of ides) {
     if ((await probeIde($, live.port)) === undefined) {
       lastTry = 0
-      gaveUp = false
+      failures = 0
       return `${live.name} is connected.`
     }
   }
-  if (force) gaveUp = false
-  if (gaveUp) return GAVE_UP
   const cwd = await $.session.cwd()
   const ide = ides.find(i => i.folders.some(f => cwd === f || cwd.startsWith(`${f}/`)))
   if (!ide) return 'No live editor is open on this folder.'
+  if (!(await listening($, ide.port))) return `${ide.name} is not listening on port ${ide.port}; /ide would fail.`
   const reason = `no open connection to port ${ide.port}`
   const now = await $.clock.now()
-  if (!force && now - lastTry < RETRY_MS) return `${ide.name} is down; retry waits.`
-  // Still down after an earlier /ide: another attempt would only repeat its failure.
-  if (!force && lastTry !== 0) {
-    gaveUp = true
-    return GAVE_UP
+  if (force) failures = 0
+  else if (lastTry !== 0) {
+    // Each failed /ide doubles the wait, so a session /ide cannot fix stops nagging.
+    const wait = Math.min(RETRY_MS * 2 ** failures, MAX_RETRY_MS)
+    if (now - lastTry < wait) return `${ide.name} is down; next retry in ${Math.ceil((wait - (now - lastTry)) / 60_000)} min.`
+    failures++
   }
   lastTry = now
   // Run /ide outside the calling hook: a command.run inside one would wait on itself.
@@ -95,7 +98,7 @@ export const register: Register = on => {
     $.clock.every(POLL_MS, () => {
       check($, false).then(
         text => {
-          if ((text.includes('probe:') || text === GAVE_UP) && text !== lastToast) $.ui.toast(`ide-reconnect: ${text}`)
+          if (text.includes('probe:') && text !== lastToast) $.ui.toast(`ide-reconnect: ${text}`)
           lastToast = text
         },
         (err: unknown) => $.ui.toast(`ide-reconnect: check failed: ${err instanceof Error ? err.message : String(err)}`),
