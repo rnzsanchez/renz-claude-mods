@@ -5,9 +5,11 @@ const RETRY_MS = 5 * 60_000
 
 type Lock = { pid: number; workspaceFolders?: string[]; ideName?: string }
 
+let ideDir: string | undefined
+
 async function liveIdeFor($: EngineInterface, cwd: string): Promise<string | undefined> {
-  const home = (await $.process.run(['printenv', 'HOME'])).stdout.trim()
-  const dir = `${home}/.claude/ide`
+  ideDir ??= `${(await $.process.run(['printenv', 'HOME'])).stdout.trim()}/.claude/ide`
+  const dir = ideDir
   if (!(await $.fs.exists(dir))) return undefined
   for (const entry of await $.fs.list(dir)) {
     if (!entry.name.endsWith('.lock')) continue
