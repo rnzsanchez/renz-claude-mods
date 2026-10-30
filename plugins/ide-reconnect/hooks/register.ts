@@ -48,6 +48,9 @@ async function probeIde($: EngineInterface, port: string): Promise<string | unde
 
 let lastTry = 0
 let lastToast = ''
+let gaveUp = false
+
+const GAVE_UP = 'auto retries are off for this session after /ide failed to connect; run /ide-reconnect to try again.'
 
 async function check($: EngineInterface, force: boolean): Promise<string> {
   const ides = await liveIdes($)
@@ -56,15 +59,23 @@ async function check($: EngineInterface, force: boolean): Promise<string> {
   for (const live of ides) {
     if ((await probeIde($, live.port)) === undefined) {
       lastTry = 0
+      gaveUp = false
       return `${live.name} is connected.`
     }
   }
+  if (force) gaveUp = false
+  if (gaveUp) return GAVE_UP
   const cwd = await $.session.cwd()
   const ide = ides.find(i => i.folders.some(f => cwd === f || cwd.startsWith(`${f}/`)))
   if (!ide) return 'No live editor is open on this folder.'
   const reason = `no open connection to port ${ide.port}`
   const now = await $.clock.now()
   if (!force && now - lastTry < RETRY_MS) return `${ide.name} is down; retry waits.`
+  // Still down after an earlier /ide: another attempt would only repeat its failure.
+  if (!force && lastTry !== 0) {
+    gaveUp = true
+    return GAVE_UP
+  }
   lastTry = now
   // Run /ide outside the calling hook: a command.run inside one would wait on itself.
   $.clock.after(0, () => {
@@ -84,7 +95,7 @@ export const register: Register = on => {
     $.clock.every(POLL_MS, () => {
       check($, false).then(
         text => {
-          if (text.includes('probe:') && text !== lastToast) $.ui.toast(`ide-reconnect: ${text}`)
+          if ((text.includes('probe:') || text === GAVE_UP) && text !== lastToast) $.ui.toast(`ide-reconnect: ${text}`)
           lastToast = text
         },
         (err: unknown) => $.ui.toast(`ide-reconnect: check failed: ${err instanceof Error ? err.message : String(err)}`),
