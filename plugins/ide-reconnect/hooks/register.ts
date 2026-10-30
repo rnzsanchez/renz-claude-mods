@@ -7,7 +7,9 @@ type Lock = { pid: number; workspaceFolders?: string[]; ideName?: string }
 
 let ideDir: string | undefined
 
-async function liveIdeFor($: EngineInterface, cwd: string): Promise<string | undefined> {
+type LiveIde = { name: string; port: string }
+
+async function liveIdeFor($: EngineInterface, cwd: string): Promise<LiveIde | undefined> {
   ideDir ??= `${(await $.process.run(['printenv', 'HOME'])).stdout.trim()}/.claude/ide`
   const dir = ideDir
   if (!(await $.fs.exists(dir))) return undefined
@@ -22,33 +24,37 @@ async function liveIdeFor($: EngineInterface, cwd: string): Promise<string | und
     const matches = (lock.workspaceFolders ?? []).some(f => cwd === f || cwd.startsWith(`${f}/`))
     if (!matches) continue
     const alive = (await $.process.run(['kill', '-0', String(lock.pid)])).exitCode === 0
-    if (alive) return lock.ideName ?? entry.name
+    if (alive) return { name: lock.ideName ?? entry.name, port: entry.name.slice(0, -'.lock'.length) }
   }
   return undefined
 }
 
-// A rejected call means the engine has no live connection to the ide server;
-// any answer, even an error result, means it is connected.
-async function ideConnected($: EngineInterface): Promise<boolean> {
-  try {
-    await $.mcp.call('ide', 'getDiagnostics', {})
-    return true
-  } catch {
-    return false
-  }
+// Undefined when this Claude process holds an open TCP connection to the IDE's port;
+// otherwise why not. The child's parent is the Claude process the mod runs in.
+async function probeIde($: EngineInterface, port: string): Promise<string | undefined> {
+  const { exitCode, stdout } = await $.process.run([
+    'sh',
+    '-c',
+    'lsof -nP -a -p "$PPID" -iTCP:"$1" -sTCP:ESTABLISHED -t',
+    'probe',
+    port,
+  ])
+  return exitCode === 0 && stdout.trim() ? undefined : `no open connection to port ${port}`
 }
 
 let lastTry = 0
+let lastToast = ''
 
 async function check($: EngineInterface, force: boolean): Promise<string> {
   const ide = await liveIdeFor($, await $.session.cwd())
   if (!ide) return 'No live editor is open on this folder.'
-  if (await ideConnected($)) {
+  const reason = await probeIde($, ide.port)
+  if (reason === undefined) {
     lastTry = 0
-    return `${ide} is connected.`
+    return `${ide.name} is connected.`
   }
   const now = await $.clock.now()
-  if (!force && now - lastTry < RETRY_MS) return `${ide} is down; retry waits.`
+  if (!force && now - lastTry < RETRY_MS) return `${ide.name} is down; retry waits.`
   lastTry = now
   // Run /ide outside the calling hook: a command.run inside one would wait on itself.
   $.clock.after(0, () => {
@@ -56,7 +62,7 @@ async function check($: EngineInterface, force: boolean): Promise<string> {
       $.ui.toast(`ide-reconnect: /ide failed: ${err instanceof Error ? err.message : String(err)}`)
     })
   })
-  return `${ide} was down; reconnecting with /ide.`
+  return `${ide.name} looked down (probe: ${reason}); reconnecting with /ide.`
 }
 
 export const register: Register = on => {
@@ -67,7 +73,10 @@ export const register: Register = on => {
     })
     $.clock.every(POLL_MS, () => {
       check($, false).then(
-        text => text.endsWith('/ide.') && $.ui.toast(`ide-reconnect: ${text}`),
+        text => {
+          if (text.includes('probe:') && text !== lastToast) $.ui.toast(`ide-reconnect: ${text}`)
+          lastToast = text
+        },
         (err: unknown) => $.ui.toast(`ide-reconnect: check failed: ${err instanceof Error ? err.message : String(err)}`),
       )
     })

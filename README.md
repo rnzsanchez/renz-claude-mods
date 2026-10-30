@@ -6,7 +6,7 @@ Claude Code mods, one folder per mod under `plugins/`. The repository is a plugi
 
 | Mod | What it does |
 |---|---|
-| `ide-reconnect` | Every 30 seconds, checks for a running editor whose workspace holds the session's folder (`~/.claude/ide/*.lock`). If one is open but the `ide` MCP server does not answer, it runs `/ide`, at most once every 5 minutes. `/ide-reconnect` runs the same check on demand. |
+| `ide-reconnect` | Every 30 seconds, checks for a running editor whose workspace holds the session's folder (`~/.claude/ide/*.lock`). If one is open but this session holds no TCP connection to its port (`lsof`), it runs `/ide`, at most once every 5 minutes. `/ide-reconnect` runs the same check on demand. |
 
 ## Install
 
