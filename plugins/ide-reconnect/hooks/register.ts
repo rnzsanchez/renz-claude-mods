@@ -7,12 +7,13 @@ type Lock = { pid: number; workspaceFolders?: string[]; ideName?: string }
 
 let ideDir: string | undefined
 
-type LiveIde = { name: string; port: string }
+type LiveIde = { name: string; port: string; folders: string[] }
 
-async function liveIdeFor($: EngineInterface, cwd: string): Promise<LiveIde | undefined> {
+async function liveIdes($: EngineInterface): Promise<LiveIde[]> {
   ideDir ??= `${(await $.process.run(['printenv', 'HOME'])).stdout.trim()}/.claude/ide`
   const dir = ideDir
-  if (!(await $.fs.exists(dir))) return undefined
+  if (!(await $.fs.exists(dir))) return []
+  const ides: LiveIde[] = []
   for (const entry of await $.fs.list(dir)) {
     if (!entry.name.endsWith('.lock')) continue
     let lock: Lock
@@ -21,12 +22,15 @@ async function liveIdeFor($: EngineInterface, cwd: string): Promise<LiveIde | un
     } catch {
       continue
     }
-    const matches = (lock.workspaceFolders ?? []).some(f => cwd === f || cwd.startsWith(`${f}/`))
-    if (!matches) continue
     const alive = (await $.process.run(['kill', '-0', String(lock.pid)])).exitCode === 0
-    if (alive) return { name: lock.ideName ?? entry.name, port: entry.name.slice(0, -'.lock'.length) }
+    if (alive)
+      ides.push({
+        name: lock.ideName ?? entry.name,
+        port: entry.name.slice(0, -'.lock'.length),
+        folders: lock.workspaceFolders ?? [],
+      })
   }
-  return undefined
+  return ides
 }
 
 // Undefined when this Claude process holds an open TCP connection to the IDE's port;
@@ -46,13 +50,19 @@ let lastTry = 0
 let lastToast = ''
 
 async function check($: EngineInterface, force: boolean): Promise<string> {
-  const ide = await liveIdeFor($, await $.session.cwd())
-  if (!ide) return 'No live editor is open on this folder.'
-  const reason = await probeIde($, ide.port)
-  if (reason === undefined) {
-    lastTry = 0
-    return `${ide.name} is connected.`
+  const ides = await liveIdes($)
+  // A cwd that drifts into a worktree with its own editor window must not
+  // trigger /ide while this session is still connected to another editor.
+  for (const live of ides) {
+    if ((await probeIde($, live.port)) === undefined) {
+      lastTry = 0
+      return `${live.name} is connected.`
+    }
   }
+  const cwd = await $.session.cwd()
+  const ide = ides.find(i => i.folders.some(f => cwd === f || cwd.startsWith(`${f}/`)))
+  if (!ide) return 'No live editor is open on this folder.'
+  const reason = `no open connection to port ${ide.port}`
   const now = await $.clock.now()
   if (!force && now - lastTry < RETRY_MS) return `${ide.name} is down; retry waits.`
   lastTry = now
