@@ -41,7 +41,10 @@ let lastTry = 0
 async function check($: EngineInterface, force: boolean): Promise<string> {
   const ide = await liveIdeFor($, await $.session.cwd())
   if (!ide) return 'No live editor is open on this folder.'
-  if (await ideConnected($)) return `${ide} is connected.`
+  if (await ideConnected($)) {
+    lastTry = 0
+    return `${ide} is connected.`
+  }
   const now = await $.clock.now()
   if (!force && now - lastTry < RETRY_MS) return `${ide} is down; retry waits.`
   lastTry = now
