@@ -45,9 +45,13 @@ async function check($: EngineInterface, force: boolean): Promise<string> {
   const now = await $.clock.now()
   if (!force && now - lastTry < RETRY_MS) return `${ide} is down; retry waits.`
   lastTry = now
-  $.ui.toast(`IDE connection down; running /ide for ${ide}`)
-  await $.command.run({ command: 'ide' })
-  return `${ide} was down; ran /ide.`
+  // Run /ide outside the calling hook: a command.run inside one would wait on itself.
+  $.clock.after(0, () => {
+    $.command.run({ command: 'ide' }).catch((err: unknown) => {
+      $.ui.toast(`ide-reconnect: /ide failed: ${err instanceof Error ? err.message : String(err)}`)
+    })
+  })
+  return `${ide} was down; reconnecting with /ide.`
 }
 
 export const register: Register = on => {
@@ -57,7 +61,10 @@ export const register: Register = on => {
       description: 'Check the IDE connection and run /ide if it is down',
     })
     $.clock.every(POLL_MS, () => {
-      void check($, false).catch(() => undefined)
+      check($, false).then(
+        text => text.endsWith('/ide.') && $.ui.toast(`ide-reconnect: ${text}`),
+        (err: unknown) => $.ui.toast(`ide-reconnect: check failed: ${err instanceof Error ? err.message : String(err)}`),
+      )
     })
     return next(e)
   })
