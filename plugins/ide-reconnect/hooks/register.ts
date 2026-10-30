@@ -8,7 +8,7 @@ type Lock = { pid: number; workspaceFolders?: string[]; ideName?: string }
 
 let ideDir: string | undefined
 
-type LiveIde = { name: string; port: string; folders: string[] }
+type LiveIde = { name: string; port: string; pid: number; folders: string[] }
 
 async function liveIdes($: EngineInterface): Promise<LiveIde[]> {
   ideDir ??= `${(await $.process.run(['printenv', 'HOME'])).stdout.trim()}/.claude/ide`
@@ -28,6 +28,7 @@ async function liveIdes($: EngineInterface): Promise<LiveIde[]> {
       ides.push({
         name: lock.ideName ?? entry.name,
         port: entry.name.slice(0, -'.lock'.length),
+        pid: lock.pid,
         folders: lock.workspaceFolders ?? [],
       })
   }
@@ -55,6 +56,20 @@ async function listening($: EngineInterface, port: string): Promise<boolean> {
   return (await $.process.run(['lsof', '-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'])).exitCode === 0
 }
 
+// True when a process other than the editor and this Claude holds an open connection
+// to the port: the editor serves one Claude session at a time, so /ide would fail.
+async function heldByOther($: EngineInterface, ide: LiveIde): Promise<boolean> {
+  const { exitCode } = await $.process.run([
+    'sh',
+    '-c',
+    'lsof -nP -iTCP:"$1" -sTCP:ESTABLISHED -t | grep -vxq -e "$PPID" -e "$2"',
+    'held',
+    ide.port,
+    String(ide.pid),
+  ])
+  return exitCode === 0
+}
+
 async function check($: EngineInterface, force: boolean): Promise<string> {
   const ides = await liveIdes($)
   // A cwd that drifts into a worktree with its own editor window must not
@@ -70,6 +85,7 @@ async function check($: EngineInterface, force: boolean): Promise<string> {
   const ide = ides.find(i => i.folders.some(f => cwd === f || cwd.startsWith(`${f}/`)))
   if (!ide) return 'No live editor is open on this folder.'
   if (!(await listening($, ide.port))) return `${ide.name} is not listening on port ${ide.port}; /ide would fail.`
+  if (await heldByOther($, ide)) return `${ide.name} is in use by another Claude session; /ide would fail.`
   const reason = `no open connection to port ${ide.port}`
   const now = await $.clock.now()
   if (force) failures = 0
