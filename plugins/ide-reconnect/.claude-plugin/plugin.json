@@ -1,0 +1,1 @@
+{ "name": "ide-reconnect", "version": "0.1.0", "description": "Runs /ide when an editor is open on this folder but the IDE connection is down" }
