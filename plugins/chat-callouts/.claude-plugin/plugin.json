@@ -1,0 +1,42 @@
+{
+  "name": "chat-callouts",
+  "description": "Labels and frames chat messages in the terminal and draws drafts in their own copyable boxes",
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "author": {
+    "name": "Renz Sanchez"
+  },
+  "userConfig": {
+    "replyStyle": {
+      "type": "string",
+      "title": "Reply style",
+      "description": "How Claude's replies are marked: label (name and time only), box (rounded frame) or bar (colored bar down the left).",
+      "options": [
+        "label",
+        "box",
+        "bar"
+      ],
+      "default": "bar"
+    },
+    "barWidth": {
+      "type": "number",
+      "title": "Bar width",
+      "description": "Thickness of the bar, 1 to 8 eighths of a cell. 8 is a full cell and gap-free in every terminal.",
+      "min": 1,
+      "max": 8,
+      "default": 8
+    },
+    "barOnMyMessages": {
+      "type": "boolean",
+      "title": "Frame on my messages",
+      "description": "Draw the bar or box around your own messages too. Off leaves just the You label.",
+      "default": true
+    },
+    "draftBoxes": {
+      "type": "boolean",
+      "title": "Draft boxes",
+      "description": "Ask Claude to fence drafts (Slack, email, PR, ticket) and draw each in a copyable box. Adds about 70 prompt tokens. Off draws drafts as plain text.",
+      "default": true
+    }
+  }
+}
