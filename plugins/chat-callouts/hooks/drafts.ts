@@ -1,4 +1,4 @@
-export const DRAFT_KINDS = ['slack', 'email', 'pr', 'ticket', 'other'] as const
+export const DRAFT_KINDS = ['slack', 'email', 'pr', 'ticket', 'other', 'command'] as const
 
 export type DraftKind = (typeof DRAFT_KINDS)[number]
 
@@ -6,7 +6,7 @@ export type Segment =
   | { type: 'text'; text: string }
   | { type: 'draft'; kind: DraftKind; body: string; isOpen: boolean }
 
-const DRAFT_OPEN = /^````draft (slack|email|pr|ticket|other)[ \t]*$/
+const DRAFT_OPEN = /^````(?:draft (slack|email|pr|ticket|other)|(command))[ \t]*$/
 const DRAFT_CLOSE = /^ {0,3}`{4,}[ \t]*$/
 const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/
 
@@ -37,7 +37,7 @@ export function splitDrafts(text: string): Segment[] | undefined {
     if (opener) {
       if (plain.join('').trim()) segments.push({ type: 'text', text: plain.join('\n') })
       plain = []
-      draft = { kind: opener[1] as DraftKind, lines: [] }
+      draft = { kind: (opener[1] ?? opener[2]) as DraftKind, lines: [] }
       continue
     }
     fence = FENCE_OPEN.exec(line)?.[1]

@@ -13,14 +13,18 @@ const DRAFT_COLORS: Record<DraftKind, ThemeKey> = {
   pr: 'suggestion',
   ticket: 'permission',
   other: 'subtle',
+  command: 'success',
 }
-const DRAFT_LABELS: Record<DraftKind, string> = { slack: 'Slack', email: 'Email', pr: 'PR', ticket: 'Ticket', other: 'Other' }
+const DRAFT_LABELS: Record<DraftKind, string> = { slack: 'Slack', email: 'Email', pr: 'PR', ticket: 'Ticket', other: 'Other', command: 'Command' }
+const boxTitle = (kind: DraftKind) => (kind === 'command' ? 'Command' : `Draft · ${DRAFT_LABELS[kind]}`)
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const DRAFT_PROMPT =
   'When the user asks you to draft a message for someone else (a Slack message, an email, a PR comment or a ticket), ' +
   'put only the draft text inside a fence of four backticks whose info string is `draft <kind>`, kind being slack, email, pr, ticket or other, ' +
-  'and close it with four backticks. Keep any commentary outside the fence.'
+  'and close it with four backticks. Keep any commentary outside the fence. ' +
+  'When you give the user a shell command to run themselves, put only the command text inside a fence of four backticks whose info string is `command`, ' +
+  'and close it with four backticks. Keep the What, Where and Undo lines outside the fence.'
 const EIGHTHS = ['▏', '▎', '▍', '▌', '▋', '▊', '▉']
 const barGlyphs = (width: number) => Array.from({ length: 200 }, () => EIGHTHS[width - 1]).join('\n')
 const PROMPT_SKIP_TRAITS = ['teammate', 'print', 'bare']
@@ -55,9 +59,9 @@ async function timeOf($: EngineInterface, requestId: string, now: number): Promi
   return clockText(value ?? firstDrawn.get(requestId) ?? now, now)
 }
 
-async function copyDraft($: EngineInterface, text: string, surface?: UiCopyArgs['surface']): Promise<string> {
+async function copyDraft($: EngineInterface, text: string, surface?: UiCopyArgs['surface'], noun = 'Draft'): Promise<string> {
   const copied = await $.ui.copy({ text, surface })
-  return copied.isCopied ? 'Draft copied.' : `Draft not copied: ${copied.reason}.`
+  return copied.isCopied ? `${noun} copied.` : `${noun} not copied: ${copied.reason}.`
 }
 
 async function drawSegments($: EngineInterface, e: Reply, segments: Segment[], drawText: DrawText): Promise<RenderElement[]> {
@@ -75,7 +79,7 @@ async function drawSegments($: EngineInterface, e: Reply, segments: Segment[], d
       <Box flexDirection="column" borderStyle="double" borderColor={color} paddingX={1}>
         <Box flexDirection="row" justifyContent="space-between">
           <Text bold color={color}>
-            Draft · {DRAFT_LABELS[seg.kind]}
+            {boxTitle(seg.kind)}
             {seg.isOpen ? ' · writing…' : ''}
           </Text>
           {!seg.isOpen && (
@@ -83,7 +87,7 @@ async function drawSegments($: EngineInterface, e: Reply, segments: Segment[], d
               key={`copy-${i}`}
               label="Copy"
               onPress={press => {
-                void copyDraft($, seg.body, press.surface).then(text => $.ui.toast(text))
+                void copyDraft($, seg.body, press.surface, seg.kind === 'command' ? 'Command' : 'Draft').then(text => $.ui.toast(text))
               }}
             />
           )}
@@ -200,7 +204,7 @@ export const register: Register = (on, options) => {
       description: 'Mark who said what (bar, box or label). Run with no argument for help.',
       argumentHint: '[style label|box|bar] [width 1-8] [on|off] [stats]',
     })
-    await $.command.register({ name: 'draftcopy', description: 'Copy the last draft Claude wrote (no arguments)' })
+    await $.command.register({ name: 'draftcopy', description: 'Copy the last draft or command Claude wrote (no arguments)' })
     return next(e)
   })
 
@@ -300,6 +304,6 @@ export const register: Register = (on, options) => {
       const draft = message.role === 'assistant' ? lastDraft(message.text) : undefined
       if (draft !== undefined) return { text: await copyDraft($, draft) }
     }
-    return { text: 'No draft found in this conversation.' }
+    return { text: 'No draft or command found in this conversation.' }
   })
 }

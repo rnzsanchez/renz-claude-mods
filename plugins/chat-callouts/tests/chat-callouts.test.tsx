@@ -137,6 +137,31 @@ test('a code block inside a draft stays in the draft', async ($, on) => {
   await reply.unmount()
 })
 
+test('a command fence is boxed as Command and copies only the command', async ($, on) => {
+  mock.clock(on)
+  const seen = engine(on)
+  const copied: string[] = []
+  const toasts: string[] = []
+  on('ui.copy', (_, e) => {
+    copied.push(e.text)
+    return { value: { isCopied: true } }
+  })
+  on('ui.toast', (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+
+  const text = `What: lists files.\n${FENCE}command\nls -la ~/Documents\n${FENCE}\nUndo: none.`
+  const reply = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', ...replyRow(text) })
+  expect(await reply.find({ type: 'Text', text: 'Command' })).toBeDefined()
+  expect(await reply.find({ type: 'Text', text: 'ls -la ~/Documents' })).toBeDefined()
+  expect(seen.map(p => p.text)).toEqual(['What: lists files.', 'Undo: none.'])
+  await reply.press({ key: 'copy-1' })
+  expect(copied).toEqual(['ls -la ~/Documents'])
+  expect(toasts).toEqual(['Command copied.'])
+  await reply.unmount()
+})
+
 test('/banners switches the style over the menu default', { options: { replyStyle: 'label' } }, async ($, on) => {
   mock.clock(on)
   engine(on)
