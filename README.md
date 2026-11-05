@@ -43,7 +43,7 @@ Every 30 seconds it looks for a running editor whose workspace holds your sessio
 
 ## chat-callouts
 
-Long sessions turn into one grey wall of text. This puts a name and a time on each message and a colored bar down the side, so you can tell your prompts from Claude's at a glance. It also asks Claude to wrap drafts (Slack, email, PR comment, ticket) in a fence and draws each one in its own box with a Copy button.
+Long sessions turn into one grey wall of text. This puts a name and a time on each message and a colored bar down the side, so you can tell your prompts from Claude's at a glance. It also asks Claude to wrap drafts (Slack, email, PR comment, ticket) and commands you are meant to run in a fence, and draws each one in its own box with a Copy button. A command box shows only the command, so Copy gives you something you can paste straight into a terminal.
 
 ```
   ▌ You · 14:02                    <- cyan bar
@@ -67,7 +67,7 @@ Long sessions turn into one grey wall of text. This puts a name and a time on ea
 | `/banners width` | `1` to `8` | Bar thickness in eighths of a cell. |
 | `/banners on` / `off` | none | Turns the labels and frames on or off. |
 | `/banners stats` | none | Shows how long drawing a message takes. |
-| `/draftcopy` | none | Copies the last draft Claude wrote. |
+| `/draftcopy` | none | Copies the last draft or command Claude wrote. |
 
 ### Menu options
 
@@ -78,11 +78,11 @@ Set them in the install screen or in `/plugin` once the mod is selected.
 | Reply style | `label`, `box`, `bar` | `bar` | How Claude's replies are marked. |
 | Bar width | `1` to `8` | `8` | Thickness of the bar. |
 | Frame on my messages | on / off | on | Off leaves your own messages with just the `You` label. |
-| Draft boxes | on / off | on | Off removes the drafting instruction and draws drafts as plain text. |
+| Draft boxes | on / off | on | Off removes the drafting and command instructions and draws both as plain text. |
 
 **Menu vs `/banners`:** a value you set with `/banners` is saved and wins across new sessions, hot reloads and `/reload-plugins`. The menu only seeds the defaults: with nothing saved, its values apply. When you later change a menu option, that option (that one only) replaces your saved `/banners` value the next time the mod loads.
 
-**Cost:** about 70 prompt tokens per request, and only when Draft boxes is on. No timers, no processes.
+**Cost:** about 120 prompt tokens per request, and only when Draft boxes is on. No timers, no processes.
 
 ### Terminal.app
 

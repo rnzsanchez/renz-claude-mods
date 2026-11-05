@@ -1,6 +1,6 @@
 {
   "name": "chat-callouts",
-  "description": "Labels and frames chat messages in the terminal and draws drafts in their own copyable boxes",
+  "description": "Labels and frames chat messages in the terminal and draws drafts and commands in their own copyable boxes",
   "types": "./types/index.d.ts",
   "license": "MIT",
   "author": {
@@ -35,7 +35,7 @@
     "draftBoxes": {
       "type": "boolean",
       "title": "Draft boxes",
-      "description": "Ask Claude to fence drafts (Slack, email, PR, ticket) and draw each in a copyable box. Adds about 70 prompt tokens. Off draws drafts as plain text.",
+      "description": "Ask Claude to fence drafts (Slack, email, PR, ticket) and commands for you to run, and draw each in a copyable box. Adds about 120 prompt tokens. Off draws them as plain text.",
       "default": true
     }
   }
